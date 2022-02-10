@@ -103,6 +103,12 @@ abstract class RingBufferFieldsUnsafe<E> extends RingBufferPadUnsafe
         }
     }
 
+    /**
+     *
+     *
+     * @param sequence
+     * @return
+     */
     @SuppressWarnings("unchecked")
     protected final E elementAt(final long sequence)
     {
@@ -243,6 +249,17 @@ public final class RingBufferUnsafe<E> extends RingBufferFieldsUnsafe<E> impleme
     }
 
     /**
+     *
+     * 在RingBuffer中获取给定序列的事件。
+     * 此通话有2种用途。
+     * 首先，当发布到一个环形缓冲区时使用这个调用。
+     * 在调用com.lmax.disruptor.RingBuffer.next()之后，使用这个调用来获取预先分配的事件，在调用com.lmax.disruptor.RingBuffer.publish(long)之前填充数据。
+     * 其次，使用这个调用时，从戒指缓冲区的数据。
+     * 在调用SequenceBarrier.waitFor(long)之后，使用任何大于当前使用者序列且小于或等于SequenceBarrier.waitFor(long)方法返回的值来调用该方法。
+     *
+     * 规定:
+     * 进入接口DataProvider
+     *
      * <p>Get the event for a given sequence in the RingBuffer.</p>
      *
      * <p>This call has 2 uses.  Firstly use this call when publishing to a ring buffer.
