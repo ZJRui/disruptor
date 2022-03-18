@@ -40,16 +40,34 @@ class RhsPadding extends Value
  *
  * <p>Also attempts to be more efficient with regards to false
  * sharing by adding padding around the volatile field.
+ *
+ * 并发序列类，用于跟踪环形缓冲区和事件处理器的进度。支持多项并发操作，包括 CAS 和订单写入。 <p>还尝试通过在 volatile 字段周围添加填充来提高虚假共享的效率。
+ *
+ * 采用缓存行填充的方式对long类型的一层包装，用以代表事件的序号。通过unsafe的cas方法从而避免了锁的开销
+ *
  */
 public class Sequence extends RhsPadding
 {
     static final long INITIAL_VALUE = -1L;
+    /**
+     * VarHandle 的必要性
+     * 随着Java中的并发和并行编程的不断扩大，我们经常会需要对某个类的字段进行原子或有序操作，但是 JVM 对Java开发者所开放的权限非常有限。例如：如果要原子性地增加某个字段的值，到目前为止我们可以使用下面三种方式：
+     *
+     * 使用AtomicInteger来达到这种效果，这种间接管理方式增加了空间开销，还会导致额外的并发问题；
+     * 使用原子性的FieldUpdaters，由于利用了反射机制，操作开销也会更大；
+     * 使用sun.misc.Unsafe提供的JVM内置函数API，虽然这种方式比较快，但它会损害安全性和可移植性，当然在实际开发中也很少会这么做。
+     * 在 VarHandle 出现之前，这些潜在的问题会随着原子API的不断扩大而越来越遭。VarHandle 的出现替代了java.util.concurrent.atomic和sun.misc.Unsafe的部分操作。并且提供了一系列标准的内存屏障操作，用于更加细粒度的控制内存排序。在安全性、可用性、性能上都要优于现有的API。VarHandle 可以与任何字段、数组元素或静态变量关联，支持在不同访问模型下对这些类型变量的访问，包括简单的 read/write 访问，volatile 类型的 read/write 访问，和 CAS(compare-and-swap)等。
+     *
+     */
     private static final VarHandle VALUE_FIELD;
 
     static
     {
         try
         {
+            /**
+             * Lookup是MethodHandles的内部类，位于java.lang.invoke包中，它是一个用于创建方法和变量句柄的工厂
+             */
             VALUE_FIELD = MethodHandles.lookup().in(Sequence.class)
                     .findVarHandle(Sequence.class, "value", long.class);
         }

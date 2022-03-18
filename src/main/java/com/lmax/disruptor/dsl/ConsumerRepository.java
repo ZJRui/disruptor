@@ -46,6 +46,12 @@ class ConsumerRepository<T> implements Iterable<ConsumerInfo>
         final EventHandler<? super T> handler,
         final SequenceBarrier barrier)
     {
+        /**
+         * 这个对象主要是用来存储消费者信息的
+         *
+         * 每一个消费者就是一个BatchEventProcessor，BatchEventProcessor对象中持有EventHandler。 而且batchEventProcessor对象中有一个Sequence对象。
+         *
+         */
         final EventProcessorInfo<T> consumerInfo = new EventProcessorInfo<>(eventprocessor, handler, barrier);
         eventProcessorInfoByEventHandler.put(handler, consumerInfo);
         eventProcessorInfoBySequence.put(eventprocessor.getSequence(), consumerInfo);

@@ -66,6 +66,10 @@ public class Disruptor<T>
      * Create a new Disruptor. Will default to {@link com.lmax.disruptor.BlockingWaitStrategy} and
      * {@link ProducerType}.MULTI
      *
+     *
+     * Disruptor的使用入口。持有RingBuffer、消费者线程池Executor、消费者集合ConsumerRepository等引用。
+     *
+     *
      * @param eventFactory   the factory to create events in the ring buffer.
      * @param ringBufferSize the size of the ring buffer.
      * @param threadFactory  a {@link ThreadFactory} to create threads to for processors.
@@ -115,6 +119,11 @@ public class Disruptor<T>
      *
      * <p>This call is additive, but generally should only be called once when setting up the Disruptor instance</p>
      *
+     * 设置事件处理程序以处理来自环形缓冲区的事件。 这些处理程序将在事件可用后立即并行处理。
+     * 此方法可用作链的开始。 例如，如果处理程序 A 必须在处理程序 B 之前处理事件：
+     * dw.handleEventsWith(A).then(B);
+     * 这个调用是累加的，但通常只应在设置 Disruptor 实例时调用一次
+     *
      * @param handlers the event handlers that will process events.
      * @return a {@link EventHandlerGroup} that can be used to chain dependencies.
      */
@@ -122,6 +131,7 @@ public class Disruptor<T>
     @SafeVarargs
     public final EventHandlerGroup<T> handleEventsWith(final EventHandler<? super T>... handlers)
     {
+        //创建数组 term[] terms=new term[]();
         return createEventProcessors(new Sequence[0], handlers);
     }
 
@@ -332,6 +342,10 @@ public class Disruptor<T>
      *
      * <p>This method must only be called once after all event processors have been added.</p>
      *
+     * 启动事件处理器并返回完全配置的环形缓冲区。
+     * 设置环形缓冲区以防止覆盖任何尚未由最慢事件处理器处理的条目。
+     * 此方法只能在添加所有事件处理器后调用一次。
+     *
      * @return the configured ring buffer.
      */
     public RingBuffer<T> start()
@@ -339,6 +353,9 @@ public class Disruptor<T>
         checkOnlyStartedOnce();
         for (final ConsumerInfo consumerInfo : consumerRepository)
         {
+            /**
+             * 启动消费者线程
+             */
             consumerInfo.start(threadFactory);
         }
 
@@ -494,13 +511,56 @@ public class Disruptor<T>
     {
         checkNotStarted();
 
+        /**
+         * 用来保存每个消费者的消费进度
+         */
         final Sequence[] processorSequences = new Sequence[eventHandlers.length];
+        /**
+         *
+         *Disruptor对象在创建的时候会 创建一个RingBuffer对象，RingBuffer对象内部有一个Sequencer属性，如果是但生产者模式那么这个Sequencer对象就是SingleProducerSequencer。
+         * Sequencer对象从父类AbstractSequencer中继承了一个Sequence属性cursor，这个Sequence cursor属性就是用来记录生产者在RingBuffer中写入数据的位置。
+         * 同时我们在创建Disruptor对象的时候会指定 当RingBuffer中没有数据的时候消费者的行为策略，这个WaitStrategy对象也被保存在了 RingBuffer对象的Sequencer对象中。
+         * 也就是RingBuffer的Sequencer对象同时 持有Sequence cursor属性记录生产者写入数据位置和waitStrategy控制消费者的行为。
+         *
+         *
+         *
+         * disruptor的handleEventsWith方法接收多个EventHandler， 针对这批EventHandler对象 会使用RingBuffer对象的newBarrier方法创建一个SequenceBarrier对象。
+         * RingBuffer本身有将创建SequenceBarrier对象的任务交给了Sequencer对象，因此在SingleProducerSequencer对象的newBarrier方法中创建了一个SequenceBarrier对象。 注意在创建SequenceBarrier对象的时候将  Sequencer对象中用来记录生产者放入数据位置的Sequence cursor对象 和waitStrategy对象都传递给了waitStrategy对象。
+         *
+         * 然后针对每一个EventHandler都创建一个BatchEventProcessor对象，同时将创建的SequenceBarrier对象交给BatchEventProcessor。
+         *
+         * 当Disruptor执行start的时候 会为每一个BatchEventProcessor对象启动一个线程，线程会执行BatchEventProcessor的run方法。
+         * 每一个BatchEventProcessor对象本质上都是一个消费者，而且BatchEventProcessor对象在被创建的时候会为其创建一个Sequence对象，用来记录该消费者在RingBuffer中消费的位置，BatchEventProcessor对象的run方法中会先根据其自身的Sequence对象记录的位置+1 作为其期望从RingBuffer中读取数据的位置，但是BatchEventProcessor不会直接取数据，因为RingBuffer中可能没有数据。
+         * BatchEventProcessor对象创建的时候保存了SequenceBarrier对象，因此他通过 SequenceBarrier对象的waitFor方法 确定他能读取数据的位置 如下：
+         *       final long availableSequence = sequenceBarrier.waitFor(nextSequence);
+         * nextSequence=BatchEventProcessor对象的sequence.get() + 1L;
+         *
+         * SequenceBarrier对象的waitFor方法中 又会使用自身持有的waitStrategy对象的waitFor方法获取当前消费者能够读取的位置。
+         * long availableSequence = waitStrategy.waitFor(sequence, cursorSequence, dependentSequence, this);
+         * 需要注意的是SequenceBarrier将自身保存的cursorSequence对象传递给了waitStrategy，这个cursorSequence是SequenceBarrier被创建的时候 RingBuffer中的Sequencer对象中的cursor属性对应的Sequence对象，是用来记录RingBuffer中生产者放入数据的位置的。
+         * 也就说waitStrategy的waitFor方法的第一个参数是消费者期望读取的位置，第二个参数cursorSequence是记录RIngBuffer中生产者放入数据的位置的Sequence，第四个参数this是SequenceBarrier对象。
+         *
+         * 在BlockingWaitStrategy 对象的waitFor方法中，他首先使用cursorSequence.get得到RingBuffer中目前生产者写入数据的位置，如果这个位置小于 消费者期望读取的位置，则使用BlockingWaitStrategy对象中的 object锁对象挂起当前消费者线程。
+         * 那么当ringbuffer发布数据的时候必然也要通过BlockingWaitStrategy对象中的object锁对象来唤醒所有的消费者线程。
+         *
+         * 那么Ringbuffer如何告知WaitStrategy呢，RingBuffer的publish方法内 通过sequencer对象publish，sequencer对象内持有waitStrategy对象的引用，因此可以使用waitStrategy对象来唤醒消费者线程。
+         *
+         *
+         * 需要注意的是：disruptor对象的handleEventsWith方法每次都会创建一个SequenceBarrier对象，这个SequenceBarrier对象被这批BatchEventProcessor对象共用，这批BatchEventProcessor对象用SequenceBarrier来挂起自己，然后RingBuffer通过Sequencer中的waitStrategy来唤醒消费者。
+         *
+         */
         final SequenceBarrier barrier = ringBuffer.newBarrier(barrierSequences);
 
         for (int i = 0, eventHandlersLength = eventHandlers.length; i < eventHandlersLength; i++)
         {
             final EventHandler<? super T> eventHandler = eventHandlers[i];
 
+            /**
+             * 每一个EventHandler都会被封装成BatchEventProcessor，这个是批量处理的
+             *
+             * 每一个BatchEventProcessor对象内部都有一个  Sequence sequence对象
+             *
+             */
             final BatchEventProcessor<T> batchEventProcessor =
                 new BatchEventProcessor<>(ringBuffer, barrier, eventHandler);
 
@@ -509,10 +569,22 @@ public class Disruptor<T>
                 batchEventProcessor.setExceptionHandler(exceptionHandler);
             }
 
+            /**
+             *   // 注册到consumerRepository[详解2]
+             */
             consumerRepository.add(batchEventProcessor, eventHandler, barrier);
+            /**
+             * 获取BatchEventProcessor对象内部的Sequence对象，表示每一个BatchEventProcessor的消费进度
+             *
+             */
             processorSequences[i] = batchEventProcessor.getSequence();
         }
 
+        /**
+         * barrierSequences：依赖的消费进度
+         *
+         * processorSequence表示 新进消费者进度。
+         */
         updateGatingSequencesForNextInChain(barrierSequences, processorSequences);
 
         return new EventHandlerGroup<>(this, consumerRepository, processorSequences);
@@ -522,11 +594,27 @@ public class Disruptor<T>
     {
         if (processorSequences.length > 0)
         {
+            /**
+             * 新进消费者的消费进度加入到 所有消费者的消费进度数组中。
+             */
             ringBuffer.addGatingSequences(processorSequences);
+
+            /**
+             * 如果说这个新进消费者是依赖了其他的消费者的，那么把其他的消费者从【所有消费者的消费进度数组】中移除。
+             * 这里为什么要移除呢？因为【所有消费者的消费进度数组】主要是用来获取最慢的进度的。那么被依赖的可以不用考虑，
+             * 因为它不可能比依赖它的慢。并且让这个数组足够小，可以提升计算最慢进度的性能。
+             *
+             */
             for (final Sequence barrierSequence : barrierSequences)
             {
                 ringBuffer.removeGatingSequence(barrierSequence);
             }
+            /**
+             * 把被依赖的消费者的endOfChain属性设置为false。 这个endOfChain用来做什么？ 主要是Disruptor在shutdown的时候需要判断是否
+             * 所有消费者都已经消费完了， 如果依赖了别人的消费者都消费完了，那么整条链路上一定都消费完了。
+             *
+             *
+             */
             consumerRepository.unMarkEventProcessorsAsEndOfChain(barrierSequences);
         }
     }

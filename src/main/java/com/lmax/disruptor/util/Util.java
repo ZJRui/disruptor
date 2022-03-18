@@ -60,6 +60,13 @@ public final class Util
      */
     public static long getMinimumSequence(final Sequence[] sequences, final long minimum)
     {
+        /**
+         * 在所有的Sequence对象中，获取一个最小的sequence
+         *
+         * 最小的sequence和minium 再比较 获取最小值。
+         * Sequence对象 的初始值是-1 。
+         *
+         */
         long minimumSequence = minimum;
         for (int i = 0, n = sequences.length; i < n; i++)
         {

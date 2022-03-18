@@ -17,6 +17,11 @@ package com.lmax.disruptor;
 
 /**
  * Coordinates claiming sequences for access to a data structure while tracking dependent {@link Sequence}s
+ *
+ * 坐标声明序列以访问数据结构，同时跟踪相关序列
+ *
+ * SequenceBarrier：消费者与缓存RingBuffer之间的桥梁。 消费者并不直接访问RingBuffer，从而减少RingBuffer上的并发冲突
+ *
  */
 public interface Sequencer extends Cursored, Sequenced
 {

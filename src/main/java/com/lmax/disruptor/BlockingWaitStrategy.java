@@ -30,6 +30,9 @@ public final class BlockingWaitStrategy implements WaitStrategy
         throws AlertException, InterruptedException
     {
         long availableSequence;
+        /**
+         *
+         */
         if (cursorSequence.get() < sequence)
         {
             synchronized (mutex)
@@ -56,6 +59,12 @@ public final class BlockingWaitStrategy implements WaitStrategy
     {
         synchronized (mutex)
         {
+            /**
+             * 这个地方有个问题。
+             *
+             *
+             *
+             */
             mutex.notifyAll();
         }
     }

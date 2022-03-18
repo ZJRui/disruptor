@@ -22,6 +22,7 @@ public enum ProducerType
 {
     /**
      * Create a RingBuffer with a single event publisher to the RingBuffer
+     * 单个生产者
      */
     SINGLE,
 

@@ -75,6 +75,9 @@ class EventProcessorInfo<T> implements ConsumerInfo
     @Override
     public void start(final ThreadFactory threadFactory)
     {
+        /**
+         * 将BatchEventProcessor的run方法作为消费者线程的具体逻辑
+         */
         final Thread thread = threadFactory.newThread(eventprocessor);
         if (null == thread)
         {

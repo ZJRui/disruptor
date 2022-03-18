@@ -56,8 +56,18 @@ abstract class RingBufferFields<E> extends RingBufferPad
             throw new IllegalArgumentException("bufferSize must be a power of 2");
         }
 
+        /**
+         * indexMask主要是为了使用位运算取模的，很多源码里都能看到这类优化
+         */
         this.indexMask = bufferSize - 1;
+
+        /**
+         *   // 可以看到这个数组除了正常的size之外还有填充的元素，这个是为了解决false sharing的，本篇文章暂不展开
+         */
         this.entries = (E[]) new Object[sequencer.getBufferSize() + 2 * BUFFER_PAD];
+        /**
+         *  // 预先填充数组元素，这对垃圾回收很优化，后续发布事件等操作都不需要创建对象，而只需要即可
+         */
         fill(eventFactory);
     }
 
@@ -65,6 +75,9 @@ abstract class RingBufferFields<E> extends RingBufferPad
     {
         for (int i = 0; i < bufferSize; i++)
         {
+            /**
+             * 在环形数组的位置上填充元素，以后都不需要创建对象
+             */
             entries[BUFFER_PAD + i] = eventFactory.newInstance();
         }
     }
@@ -162,8 +175,16 @@ public final class RingBuffer<E> extends RingBufferFields<E> implements Cursored
         final int bufferSize,
         final WaitStrategy waitStrategy)
     {
+        /**
+         * Sequencer: 生产者与缓存RingBuffer之间的桥梁。单生产者与多生产者分别对应于两个实现SingleProducerSequencer与
+         * MultiProducerSequencer。Sequencer用于向RingBuffer申请空间，使用publish方法通过waitStrategy通知所有在等待可消费事件的SequenceBarrier；
+         *
+         */
         SingleProducerSequencer sequencer = new SingleProducerSequencer(bufferSize, waitStrategy);
 
+        /**
+         * 创建RingBuffer的时候 将Sequencer对象放置进入了
+         */
         return new RingBuffer<>(factory, sequencer);
     }
 
@@ -405,9 +426,19 @@ public final class RingBuffer<E> extends RingBufferFields<E> implements Cursored
      * @param sequencesToTrack the additional sequences to track
      * @return A sequence barrier that will track the specified sequences.
      * @see SequenceBarrier
+     *
+     * 创建一个新的 SequenceBarrier 供 EventProcessor 使用，以跟踪哪些消息可从环形缓冲区中读取，给定要跟踪的序列列表。
      */
     public SequenceBarrier newBarrier(final Sequence... sequencesToTrack)
     {
+        /**
+         * Sequencer 用于向RingBuffer申请空间。
+         *
+         * SequenceBarrier：消费者与缓存RingBuffer之间的桥梁。 消费者并不直接访问RingBuffer，从而减少RingBuffer上的并发冲突
+         *
+         * 生产者通过Sequencer控制RingBuffer，以及唤醒等待事件的消费者，消费者通过SequenceBarrier监听RingBuffer的可消费事件。
+         *
+         */
         return sequencer.newBarrier(sequencesToTrack);
     }
 
@@ -467,6 +498,10 @@ public final class RingBuffer<E> extends RingBufferFields<E> implements Cursored
     @Override
     public void publishEvent(final EventTranslator<E> translator)
     {
+        /**
+         * 申请sequence 。 每一个RingBuffer中有一个Sequencer对象
+         *
+         */
         final long sequence = sequencer.next();
         translateAndPublish(translator, sequence);
     }
@@ -964,10 +999,18 @@ public final class RingBuffer<E> extends RingBufferFields<E> implements Cursored
     {
         try
         {
+            /**
+             * 填充时间内容。 将唤醒数组中 指定sequence位置的元素取出来，然后将其传递给EventTranslator对象
+             *
+             * EventTranslator对象内部会 给这个对象填充要发布的数据
+             */
             translator.translateTo(get(sequence), sequence);
         }
         finally
         {
+            /**
+             * 提交发布
+             */
             sequencer.publish(sequence);
         }
     }

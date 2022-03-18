@@ -18,14 +18,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class LogEventMain
 {
     private static  final AtomicInteger threadCount=new AtomicInteger(0);
-    public static void main(String[] args)
+    public static void main(String[] args) throws  Exception
     {
 
 
-        ExecutorService executorService = Executors.newCachedThreadPool();
         LongEventFactory longEventFactory = new LongEventFactory();
 
-        int ringBufferSize=1024*1024;
+        int ringBufferSize=8;
 
         Disruptor<LongEvent> disruptor = new Disruptor<LongEvent>(longEventFactory, ringBufferSize, new ThreadFactory()
         {
@@ -34,7 +33,7 @@ public class LogEventMain
             {
                 Runnable target;
                 Thread thread=new Thread(r);
-                thread.setName("disruptor-"+threadCount.incrementAndGet());
+                thread.setName("custom-disruptor-"+threadCount.incrementAndGet());
                 return thread;
             }
         }, ProducerType.SINGLE, new YieldingWaitStrategy());
@@ -57,8 +56,8 @@ public class LogEventMain
             byteBuffer.putLong(0, i);
             producer.onData(byteBuffer);
         }
+        System.in.read();
         disruptor.shutdown();
-        executorService.shutdown();
 
 
     }

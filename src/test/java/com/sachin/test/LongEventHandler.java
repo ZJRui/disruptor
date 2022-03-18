@@ -16,5 +16,8 @@ public class LongEventHandler implements EventHandler<LongEvent>
     {
         String threadName = Thread.currentThread().getName() + Thread.currentThread().getId();
         System.out.println("线程：" + threadName + "消费了消息：" + event.getValue());
+        System.out.println("消费结束");
+        Thread.sleep(1000 * 10);//等待十秒钟
+
     }
 }

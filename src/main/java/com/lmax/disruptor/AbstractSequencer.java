@@ -32,6 +32,14 @@ public abstract class AbstractSequencer implements Sequencer
 
     protected final int bufferSize;
     protected final WaitStrategy waitStrategy;
+    /**
+     * Cursor 是Sequencer的成员变量。
+     * Sequencer有两种： SingleProducerSequencer和MultiProducerSequencer。
+     *
+     * 对于SingleProducerSequencer来说，cursor表示RingBuffer上当前已发布的最大Sequence。 这个位置上已经放入了数据。 sequence的值可以大于BufferSize
+     * 对于MultiProducerSequencer来说，cursor是RingBuffer上当前已经申请的最大的Sequence。
+     *
+     */
     protected final Sequence cursor = new Sequence(Sequencer.INITIAL_CURSOR_VALUE);
     protected volatile Sequence[] gatingSequences = new Sequence[0];
 
@@ -107,6 +115,7 @@ public abstract class AbstractSequencer implements Sequencer
     @Override
     public SequenceBarrier newBarrier(final Sequence... sequencesToTrack)
     {
+
         return new ProcessingSequenceBarrier(this, waitStrategy, cursor, sequencesToTrack);
     }
 
