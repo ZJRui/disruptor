@@ -147,6 +147,7 @@ public final class MultiProducerSequencer extends AbstractSequencer
          *          *  作为返回值交给Producer，然后Producer通过这个位置获取到对应位置的对象，将数据写入然后发布。 而且一般情况下SingleProducerSequencer的next方法中
          *          *  是不会对Sequencer对象的cursor进行修改，只有生产者在publish的时候才会更改Sequencer对象中的cursor。
          *          *
+         *
          *          *  但是在多生产者模式中  我们要考虑的是 多个线程同时执行next方法 声明获取 RingBuffer中的某些位置，一旦我们将这个位置交给了这个生产者，则
          *          *  需要保证这个位置不会被其他线程重复使用。 因此你胡看到在MultiProducerSequencer的next方法中 会对生产者游标cursor直接进行修改。
          *          *  也就是先进行 long current = cursor.getAndAdd(n); 这会 使用cas来更新cursor中保存的值。从而获得占用。 这种方式会存在两个问题：
