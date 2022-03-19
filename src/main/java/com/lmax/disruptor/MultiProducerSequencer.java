@@ -141,7 +141,7 @@ public final class MultiProducerSequencer extends AbstractSequencer
          *
          *
          * ========================思考： 这里为什么 对cursor进行修改================
-         *  cursorSequence对象 是 RingBuffer对象中的Sequencer对象的cursor属性引用的对象，他代表着生产真在RingBuffer中写入数据的最后的位置。
+         *  BlockingWaitStrategy的waitFor方法中的cursorSequence对象 是 RingBuffer对象中的Sequencer对象的cursor属性引用的对象，他代表着生产真在RingBuffer中写入数据的最后的位置。
          *          *  正常情况下 生产者首先 声名 对RingBuffer中某个位置的占领，其实就是通过Sequencer的next方法获取  对RingBuffer中某个位置的使用权。
          *          *  在 单生产者模式下，SingleProducerSequencer 对象中通过 nextValue维持当前 生产者获取到在RingBuffer中的位置。 next方法中将nextValue
          *          *  作为返回值交给Producer，然后Producer通过这个位置获取到对应位置的对象，将数据写入然后发布。 而且一般情况下SingleProducerSequencer的next方法中
