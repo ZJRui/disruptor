@@ -1,0 +1,4 @@
+package com.lmax.disruptor.jmh_generated;
+public class RingBufferFalseSharingBenchmark_PaddedRingBufferWithNoisyNeighbour_jmhType extends RingBufferFalseSharingBenchmark_PaddedRingBufferWithNoisyNeighbour_jmhType_B3 {
+}
+

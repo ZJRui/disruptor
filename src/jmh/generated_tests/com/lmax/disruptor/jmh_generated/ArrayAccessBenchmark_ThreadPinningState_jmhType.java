@@ -1,0 +1,4 @@
+package com.lmax.disruptor.jmh_generated;
+public class ArrayAccessBenchmark_ThreadPinningState_jmhType extends ArrayAccessBenchmark_ThreadPinningState_jmhType_B3 {
+}
+

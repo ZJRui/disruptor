@@ -1,0 +1,4 @@
+package com.lmax.disruptor.jmh_generated;
+public class MultiProducerSequencerBenchmark_StateMultiProducerSequencerVarHandle_jmhType extends MultiProducerSequencerBenchmark_StateMultiProducerSequencerVarHandle_jmhType_B3 {
+}
+

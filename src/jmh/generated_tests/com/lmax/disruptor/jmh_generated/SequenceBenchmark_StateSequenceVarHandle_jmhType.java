@@ -1,0 +1,4 @@
+package com.lmax.disruptor.jmh_generated;
+public class SequenceBenchmark_StateSequenceVarHandle_jmhType extends SequenceBenchmark_StateSequenceVarHandle_jmhType_B3 {
+}
+

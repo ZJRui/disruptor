@@ -1,0 +1,4 @@
+package com.lmax.disruptor.jmh_generated;
+public class RingBufferBenchmark_StateRingBufferArray_jmhType extends RingBufferBenchmark_StateRingBufferArray_jmhType_B3 {
+}
+

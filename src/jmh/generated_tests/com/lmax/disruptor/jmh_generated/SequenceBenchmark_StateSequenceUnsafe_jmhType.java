@@ -1,0 +1,4 @@
+package com.lmax.disruptor.jmh_generated;
+public class SequenceBenchmark_StateSequenceUnsafe_jmhType extends SequenceBenchmark_StateSequenceUnsafe_jmhType_B3 {
+}
+
