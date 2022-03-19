@@ -98,6 +98,20 @@ public final class SingleProducerSequencer extends SingleProducerSequencerFields
          */
         long nextValue = this.nextValue;
 
+        /**
+         *          当前序列的nextValue + requiredCapacity是事件发布者要申请的序列值。
+         *          当前序列的cachedValue记录的是之前事件处理者申请的序列值。
+         *
+         *                  想一下一个环形队列，事件发布者在什么情况下才能申请一个序列呢？
+         *               事件发布者当前的位置在事件处理者前面，并且不能从事件处理者后面追上事件处理者(因为是环形)，
+         *               即 事件发布者要申请的序列值大于事件处理者之前的序列值 且 事件发布者要申请的序列值减去环的长度要小于事件处理者的序列值
+         *               如果满足这个条件，即使不知道当前事件处理者的序列值，也能确保事件发布者可以申请给定的序列。
+         *               如果不满足这个条件，就需要查看一下当前事件处理者的最小的序列值(因为可能有多个事件处理者)，
+         *               如果当前要申请的序列值比当前事件处理者的最小序列值大了一圈(从后面追上了)，那就不能申请了(申请的话会覆盖没被消费的事件)，
+         *               也就是说没有可用的空间(用来发布事件)了，也就是hasAvailableCapacity方法要表达的意思。
+         *
+         *
+         */
         long wrapPoint = (nextValue + requiredCapacity) - bufferSize;
         long cachedGatingSequence = this.cachedValue;
 
@@ -199,7 +213,14 @@ public final class SingleProducerSequencer extends SingleProducerSequencerFields
              * 因此nextValue表示 上一次生产者将数据放入的最后的位置。 nextValue=7 表示 7的位置已经有了数据，nextValue的最开始是-1，因此 nextSequence=nextValue+n， 从而nextSequence是从0 开始的，
              * 也就是nextSequence=0，表示本次生产者会将数据写入数组0的位置。 nextValue=7，表示生产者将数据写入了数组位置为7的位置。
              *
-             * 问题：这个地方不太理解，为什么需要将cursor设置为 nextValue呢？ 毕竟在RingBuffer 进行publishEvent的时候会自动进行设置cursor
+             * 问题：这个地方不太理解，为什么需要将cursor设置为 nextValue呢？ 毕竟在RingBuffer 进行publishEvent的时候会自动进行设置cursor，
+             *
+             *
+             * SingleProducerSequencer 和MultiProducerSequencer 都有一个claim方法，当RingBuffer调用 resetTo(long sequence)的时候
+             * 首先会执行sequencer对象的claim方法，然后使用sequencer.publish(sequence)这个位置。 本意就是说 RingBuffer声明对指定的位置放入数据
+             * 而不是使用传统的RingBuffer.next方法获取下一个位置。 MultiProducerSequencer的claim方法 会直接修改cursor对象中保存的value属性。
+             * 但是在SingleProducerSequencer的claim方法中没有对cursor属性直接修改，而是将 claim的位置保存在了nextValue中。这大概就是为什么要在主类
+             * 将nextValue更新到cursor中的原因吧。
              *
              */
             cursor.setVolatile(nextValue);  // StoreLoad fence
@@ -326,6 +347,24 @@ public final class SingleProducerSequencer extends SingleProducerSequencerFields
     public boolean isAvailable(final long sequence)
     {
         final long currentSequence = cursor.get();
+        /**
+         * currentSequence-bufferSize 是什么意思？
+         *
+         * 比如curs是13， bufferSize是8，则 13-8=5，也就是 cur指向 bufferSize中下标为5的位置。
+         *
+         * 因为currentSequence标记的是生产者写入的数据的位置，也就是说currentSequence一定是一直往上递增的，
+         * 也就是说 现在curSeq=13，是从之前的当前该位置5开始一直写，6,7,8,9,10,11,12,写到了现在的这个13位置，因此
+         *
+         * 大于currentSequence-buffferSize的位置 是有数据存在的。
+         *
+         * currentSequence表示当前的位置，想读取数据的位置必然要小于currentSequence ，因此sequence<=currentSequence
+         *
+         * currentSequence所在的位置 同时也是 currentSequence-bufferSize所在的位置。从currentSequence-bufferSize开始一直写，序号一直递增
+         * 从而写到了现在的currentSequence，因此 对于小于currentSequence-bufferSize的那些位置会在写的过程中被覆盖，数据只能保留住currentSequence-bufferSize到currentSequence之间的数据
+         * 因此sequence 要大于currentSequence-bufferSize。
+         *
+         *
+         */
         return sequence <= currentSequence && sequence > currentSequence - bufferSize;
     }
 

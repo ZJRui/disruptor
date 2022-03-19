@@ -184,6 +184,15 @@ public class Disruptor<T>
             sequences[i] = processors[i].getSequence();
         }
 
+        /**
+         * 将EventProcessor消费者对象中的sequence 对象交给了RingBuffer。
+         * RingBuffer内部实际上是将这个sequence对象交给了RingBuffer的Sequencer对象
+         *
+         * 在Sequencer对象中 通过一个Sequence数组属性gatingSequences 维护这些Sequence，而且值得注意的是
+         * 当这些Sequence对象被添加到数组的时候，Sequencer对象 会将Sequence对象标记的位置 设置为当前Sequencer对象的Sequence cursor属性所
+         * 标记的位置。 也就是说假设cursor标记的位置是13 ，意味着生产者写入数据的位置是13，那么这些新添加的消费者的Sequence都会标记为13,13之前的数据
+         * 对这些消费者是不可见的。
+         */
         ringBuffer.addGatingSequences(sequences);
 
         return new EventHandlerGroup<>(this, consumerRepository, Util.getSequencesFor(processors));

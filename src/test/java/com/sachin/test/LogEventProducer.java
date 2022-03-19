@@ -21,6 +21,7 @@ public class LogEventProducer
     public void onData(ByteBuffer byteBuffer)
     {
         long sequence = ringBuffer.next();
+
         try{
             LongEvent longEvent = ringBuffer.get(sequence);
             longEvent.setValue(byteBuffer.getLong(0));

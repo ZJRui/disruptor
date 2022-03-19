@@ -20,6 +20,9 @@ import com.lmax.disruptor.dsl.ProducerType;
 
 abstract class RingBufferPad
 {
+    /**
+     * RingBufferPad：解决缓存行伪共享的填充类；
+     */
     protected byte
         p10, p11, p12, p13, p14, p15, p16, p17,
         p20, p21, p22, p23, p24, p25, p26, p27,
@@ -32,9 +35,28 @@ abstract class RingBufferPad
 
 abstract class RingBufferFields<E> extends RingBufferPad
 {
+    // 用来预留填充的单侧slot个数，加速计算
     private static final int BUFFER_PAD = 32;
 
+    /**
+     *        RingBuffer的内部结构明确了：内部用数组来实现，同时有保存数组长度的域bufferSize和下标掩码indexMask，还有一个sequencer。
+     *        这里要注意几点：
+     *               1.整个RingBuffer内部做了大量的缓存行填充，前后各填充了56个字节，entries本身也根据引用大小进行了填充，
+     *               假设引用大小为4字节，那么entries数组两侧就要个填充32个空数组位。也就是说，实际的数组长度比bufferSize要大。所以可以看到根据序列从entries中取元素的方法elementAt内部做了一些调整，不是单纯的取模。
+     *               2.bufferSize必须是2的幂，indexMask就是bufferSize-1，这样取模更高效(sequence&indexMask)。
+     *               3.初始化时需要传入一个EventFactory，用来做队列内事件的预填充。
+     *
+     *                  总结下RingBuffer的特点：内部做了细致的缓存行填充，避免伪共享；内部队列基于数组实现，能很好的利用程序的局部性；队列上的事件槽会不断重复利用，不受JavaGC的影响。
+     *RingBuffer和普通的FIFO队列相比还有一个重要的区别就是，RingBuffer避免了头尾节点的竞争，多个事件发布者/事件处理者之间不必竞争同一个节点，只需要安全申请序列值各自存取事件就好了。
+     */
     private final long indexMask;
+    /**
+     * 内存连续不回收，RingBuffer在初始化的时候就已经将数组全部填充完毕，
+     * 因此他们是内存连续的且一直存在内存中，生产者只是会重新设置数组中对象的值，改变生产指针，而消费者只会根据指针读取数组中对应下标的值，这样就避免了垃圾回收
+     *
+     * entries中只会存储的对象的引用，64位无压缩的情况下一个引用占用8个字节，压缩的情况下占用4个字节
+     *
+     */
     private final E[] entries;
     protected final int bufferSize;
     protected final Sequencer sequencer;
@@ -62,7 +84,14 @@ abstract class RingBufferFields<E> extends RingBufferPad
         this.indexMask = bufferSize - 1;
 
         /**
-         *   // 可以看到这个数组除了正常的size之外还有填充的元素，这个是为了解决false sharing的，本篇文章暂不展开
+         *   可以看到这个数组除了正常的size之外还有填充的元素，这个是为了解决false sharing的，本篇文章暂不展开
+         *
+         *  RingBuffer预分配内存时在数组的左右俩侧各预留了BUFFER_PAD个slot；
+         * 内存预分配时从BUFFER_PAD处开始，在64位JDK中，假设开启指针压缩，则相当于左侧预留32个slot，右侧预留32个slot；
+         *
+         * 对于entries对象，左右两侧各预留了128 bytes（因为左右各留出32个引用slot，引用在64位压缩的情况下每个引用占用4个字节），这就保证了缓存行在<=128bytes时，entries对象一定不会和其它对象共享缓存行。
+         *
+         *
          */
         this.entries = (E[]) new Object[sequencer.getBufferSize() + 2 * BUFFER_PAD];
         /**
@@ -347,6 +376,7 @@ public final class RingBuffer<E> extends RingBufferFields<E> implements Cursored
     /**
      * Sets the cursor to a specific sequence and returns the preallocated entry that is stored there.  This
      * can cause a data race and should only be done in controlled circumstances, e.g. during initialisation.
+     * 将游标设置为特定序列并返回存储在那里的预分配条目。这可能会导致数据竞争，并且只能在受控情况下进行，例如在初始化期间。
      *
      * @param sequence The sequence to claim.
      * @return The preallocated event.
@@ -393,6 +423,12 @@ public final class RingBuffer<E> extends RingBufferFields<E> implements Cursored
      */
     public void addGatingSequences(final Sequence... gatingSequences)
     {
+        /**
+         *  在Sequencer对象中 通过一个Sequence数组属性gatingSequences 维护这些Sequence，而且值得注意的是
+         *          * 当这些Sequence对象被添加到数组的时候，Sequencer对象 会将Sequence对象标记的位置 设置为当前Sequencer对象的Sequence cursor属性所
+         *          * 标记的位置。 也就是说假设cursor标记的位置是13 ，意味着生产者写入数据的位置是13，那么这些新添加的消费者的Sequence都会标记为13,13之前的数据
+         *          * 对这些消费者是不可见的。
+         */
         sequencer.addGatingSequences(gatingSequences);
     }
 

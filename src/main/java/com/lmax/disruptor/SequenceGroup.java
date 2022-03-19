@@ -69,7 +69,8 @@ public final class SequenceGroup extends Sequence
     /**
      * Add a {@link Sequence} into this aggregate.  This should only be used during
      * initialisation.  Use {@link SequenceGroup#addWhileRunning(Cursored, Sequence)}
-     *
+     *添加一个序列到序列组，这个方法只能在初始化的时候调用。
+     *      * 运行时添加的话，使用addWhileRunning(Cursored, Sequence)
      * @param sequence to be added to the aggregate.
      * @see SequenceGroup#addWhileRunning(Cursored, Sequence)
      */

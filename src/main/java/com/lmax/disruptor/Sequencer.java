@@ -22,6 +22,7 @@ package com.lmax.disruptor;
  *
  * SequenceBarrier：消费者与缓存RingBuffer之间的桥梁。 消费者并不直接访问RingBuffer，从而减少RingBuffer上的并发冲突
  *
+ * 框架中也针对序列的使用，提供了专门的功能接口Sequencer：    Sequencer接口扩展了Cursored和Sequenced。
  */
 public interface Sequencer extends Cursored, Sequenced
 {
@@ -33,6 +34,7 @@ public interface Sequencer extends Cursored, Sequenced
     /**
      * Claim a specific sequence.  Only used if initialising the ring buffer to
      * a specific value.
+     * 声明一个序列，这个方法在初始化RingBuffer的时候被调用。
      *
      * @param sequence The sequence to initialise too.
      */
@@ -40,6 +42,8 @@ public interface Sequencer extends Cursored, Sequenced
 
     /**
      * Confirms if a sequence is published and the event is available for use; non-blocking.
+     *
+     *判断一个序列是否被发布，并且发布到序列上的事件是可处理的。非阻塞方法。
      *
      * @param sequence of the buffer to check
      * @return true if the sequence is available for use, false if not
@@ -88,6 +92,13 @@ public interface Sequencer extends Cursored, Sequenced
      * there are no available values <code>&gt;= nextSequence</code> the return value will be
      * <code>nextSequence - 1</code>.  To work correctly a consumer should pass a value that
      * is 1 higher than the last sequence that was successfully processed.
+     *
+     *
+     * 获取ringbufffer上安全使用的最大序列值。
+     * 具体实现里面，这个调用可能需要序列上从nextSequence到availableSequence之间的值。
+     * 如果没有比nextSequence 大的可用序列，会返回nextSequence-1.
+     * 为了保证正确，事件处理者应该传递一个比最后的序列值大1个单位的序列来处理
+     *
      *
      * @param nextSequence      The sequence to start scanning from.
      * @param availableSequence The sequence to scan to.
